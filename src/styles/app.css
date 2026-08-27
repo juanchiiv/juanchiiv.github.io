@@ -2028,3 +2028,41 @@ ul {
 .index-row--brief:hover .index-row__name {
   color: var(--accent);
 }
+
+/* =========================================================================
+   Grid items must be allowed to shrink
+   A grid item defaults to `min-width: auto`, so it refuses to become narrower
+   than its content's minimum. The architecture diagram carries a 520px minimum
+   on its SVG (below that it stops being readable), which was widening the whole
+   track — and with it the document — to 574px on a 390px screen.
+   Resetting to 0 lets the track match the viewport and hands the overflow back
+   to `.arch__scroll`, which is built to scroll it sideways on its own.
+   ========================================================================= */
+
+.case__layout > *,
+.hero__grid > *,
+.mini > * {
+  min-width: 0;
+}
+
+/* =========================================================================
+   Specificity repair
+   `.beat p` (0,1,1) outranks a single-class rule, so the beat labels and the
+   diagram hint — both <p> inside .beat — were silently inheriting body-copy
+   size and colour instead of their own. Re-assert them with a descendant
+   selector rather than reaching for !important.
+   ========================================================================= */
+
+.beat .beat__label {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+@media (max-width: 700px) {
+  .arch .arch__hint {
+    font-size: 0.6rem;
+    line-height: 1.5;
+    color: var(--text-3);
+  }
+}
