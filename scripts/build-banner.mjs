@@ -1,133 +1,159 @@
 /**
  * Builds the LinkedIn cover photo (1584×396).
  *
- * Two constraints shape the layout:
- *  - The profile picture overlaps the bottom-left, so roughly the first 380px
- *    and the lower band on that side are kept empty on purpose.
- *  - LinkedIn crops the sides on narrow screens, so nothing that matters is
- *    allowed near the left or right edge.
+ * Right side: keycaps that come apart as they travel left, leaving a green
+ * glow in the space they vacate. Left side: the role, the stack as icons, and
+ * the site.
  *
- * Run with: npm run banner   (needs sharp: npm i --no-save sharp)
+ * Two constraints shape the layout:
+ *  - The profile picture overlaps the bottom-left, so that corner stays empty.
+ *  - LinkedIn crops the sides on narrow screens, so nothing that matters sits
+ *    near either edge.
+ *
+ * Icon paths come from `simple-icons`, installed on demand.
+ * Run: npm i --no-save sharp simple-icons && npm run banner
  */
 import { writeFileSync } from 'node:fs';
 import sharp from 'sharp';
+import * as si from 'simple-icons';
 
 const W = 1584;
 const H = 396;
 
 const BG = '#0a0b0d';
-const PANEL = '#0f1114';
-const TEXT = '#e9ebee';
+const KEY_FILL = '#15181e';
+const KEY_EDGE = '#333a44';
 const MUTED = '#9ba2ac';
+const DIM = '#656c76';
 const SIGNAL = '#c8f751';
-const FLOW = '#6ea3ff';
 
-const FONT = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
 const MONO = "'Consolas', 'Courier New', monospace";
 
-const ES = {
-  eyebrow: 'FULL STACK DEVELOPER',
-  headline: 'De la idea al sistema.',
-  tiers: ['INTERFAZ', 'APP', 'LÓGICA', 'DATOS'],
-};
-const EN = {
-  eyebrow: 'FULL STACK DEVELOPER',
-  headline: 'From idea to system.',
-  tiers: ['INTERFACE', 'APP', 'LOGIC', 'DATA'],
-};
+/** Deterministic PRNG so the scatter never changes between runs. */
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
 
-const lang = process.argv[2] === 'en' ? EN : ES;
-const outFile = process.argv[2] === 'en' ? 'public/linkedin-banner-en.png' : 'public/linkedin-banner.png';
-
-/**
- * The hero diagram turned on its side: the stack reads left to right and
- * funnels from many interface nodes down to a single database.
- */
-function diagram() {
-  const cols = [
-    { x: 960, n: 3 },
-    { x: 1110, n: 2 },
-    { x: 1265, n: 2 },
-    { x: 1410, n: 1 },
+/** Keys are placed right to left; `t` is how far into the dissolve each one is. */
+function keycaps() {
+  const rows = [
+    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I'],
+    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K'],
+    ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ','],
   ];
-  const midY = 190;
-  const gap = 58;
-
-  const pos = cols.map((c) =>
-    Array.from({ length: c.n }, (_, i) => midY + (i - (c.n - 1) / 2) * gap),
-  );
+  const size = 44;
+  const gap = 9;
+  const rightEdge = 1462;
+  const midY = 198;
+  const rand = rng(20260827);
 
   let out = '';
 
-  // Edges
-  for (let i = 0; i < cols.length - 1; i++) {
-    for (const ay of pos[i]) {
-      for (const by of pos[i + 1]) {
-        out += `<line x1="${cols[i].x}" y1="${ay}" x2="${cols[i + 1].x}" y2="${by}" stroke="#a0b4d2" stroke-opacity="0.15" stroke-width="1"/>`;
+  rows.forEach((row, r) => {
+    const y0 = midY + (r - 1) * (size + gap) + r * 2;
+    const rowShift = r * 14;
+
+    row.forEach((label, i) => {
+      const fromRight = row.length - 1 - i;
+      const x0 = rightEdge - rowShift - (fromRight + 1) * (size + gap);
+      const t = Math.min(1, Math.max(0, (1 - i / (row.length - 1)) * 1.28 - 0.06));
+
+      if (t > 0.82) {
+        for (let k = 0; k < 5; k++) {
+          const sx = x0 - 30 + rand() * (size + 60);
+          const sy = y0 - 16 + rand() * (size + 32);
+          const sz = 3 + rand() * 5;
+          out += `<rect x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" rx="1" fill="${SIGNAL}" fill-opacity="${(0.1 + rand() * 0.2).toFixed(2)}" transform="rotate(${(rand() * 90).toFixed(1)} ${sx.toFixed(1)} ${sy.toFixed(1)})"/>`;
+        }
+        return;
       }
-    }
-  }
 
-  // One path lit up, top interface node down to the database
-  const path = [pos[0][0], pos[1][0], pos[2][0], pos[3][0]];
-  for (let i = 0; i < path.length - 1; i++) {
-    out += `<line x1="${cols[i].x}" y1="${path[i]}" x2="${cols[i + 1].x}" y2="${path[i + 1]}" stroke="${FLOW}" stroke-opacity="0.8" stroke-width="1.8"/>`;
-  }
+      const drift = t * t;
+      const dx = (rand() - 0.5) * 70 * drift;
+      const dy = (rand() - 0.5) * 78 * drift;
+      const rot = (rand() - 0.5) * 62 * drift;
+      const opacity = 1 - t * 0.72;
+      const cx = x0 + size / 2 + dx;
+      const cy = y0 + size / 2 + dy;
+      const edge = t > 0.35 ? SIGNAL : KEY_EDGE;
+      const edgeOp = t > 0.35 ? 0.28 + t * 0.5 : 0.9;
 
-  // Nodes
-  cols.forEach((c, i) => {
-    pos[i].forEach((y) => {
-      const lit = path[i] === y;
-      const r = i === cols.length - 1 ? 11 : 8;
-      if (lit) out += `<circle cx="${c.x}" cy="${y}" r="${r + 8}" fill="${SIGNAL}" fill-opacity="0.1"/>`;
-      out += `<circle cx="${c.x}" cy="${y}" r="${r}" fill="${PANEL}" stroke="${lit ? SIGNAL : '#a0b4d2'}" stroke-opacity="${lit ? 1 : 0.42}" stroke-width="1.8"/>`;
+      out += `<g transform="rotate(${rot.toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)})" opacity="${opacity.toFixed(2)}">`;
+      out += `<rect x="${(x0 + dx).toFixed(1)}" y="${(y0 + dy).toFixed(1)}" width="${size}" height="${size}" rx="7" fill="${KEY_FILL}" stroke="${edge}" stroke-opacity="${edgeOp.toFixed(2)}" stroke-width="1.2"/>`;
+      out += `<rect x="${(x0 + dx + 5).toFixed(1)}" y="${(y0 + dy + 4).toFixed(1)}" width="${size - 10}" height="${size - 12}" rx="4" fill="none" stroke="#ffffff" stroke-opacity="${(0.05 * (1 - t)).toFixed(3)}"/>`;
+      out += `<text x="${(x0 + dx + size / 2).toFixed(1)}" y="${(y0 + dy + size / 2 + 5).toFixed(1)}" text-anchor="middle" font-family="${MONO}" font-size="15" fill="${t > 0.35 ? SIGNAL : MUTED}" fill-opacity="${t > 0.35 ? 0.85 : 0.75}">${label}</text>`;
+      out += `</g>`;
     });
-  });
-
-  // Packet on the first leg
-  out += `<circle cx="${(cols[0].x + cols[1].x) / 2}" cy="${(path[0] + path[1]) / 2}" r="5" fill="${FLOW}"/>`;
-
-  // Tier labels, on one baseline under the diagram
-  cols.forEach((c, i) => {
-    out += `<text x="${c.x}" y="310" text-anchor="middle" font-family="${MONO}" font-size="12" letter-spacing="1.8" fill="#656c76">${lang.tiers[i]}</text>`;
   });
 
   return out;
 }
 
+/**
+ * The stack, monochrome so the row reads as one object rather than a pile of
+ * brand colours. Only what actually appears in the portfolio is listed.
+ */
+const STACK = ['siPhp', 'siLaravel', 'siPython', 'siDjango', 'siSpring', 'siReact', 'siMysql', 'siPostgresql', 'siMongodb', 'siDocker'];
+
+function stackIcons(x, y, size = 32, step = 52) {
+  let out = '';
+  STACK.forEach((key, i) => {
+    const icon = si[key];
+    if (!icon) return;
+    const scale = size / 24;
+    const gx = x + i * step;
+    out += `<g transform="translate(${gx} ${y}) scale(${scale.toFixed(4)})" opacity="0.8">`;
+    out += `<title>${icon.title}</title>`;
+    out += `<path d="${icon.path}" fill="#dfe3e8"/>`;
+    out += `</g>`;
+  });
+  return out;
+}
+
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <pattern id="grid" width="66" height="66" patternUnits="userSpaceOnUse">
+    <pattern id="g" width="66" height="66" patternUnits="userSpaceOnUse">
       <path d="M66 0H0V66" fill="none" stroke="#ffffff" stroke-opacity="0.03" stroke-width="1"/>
     </pattern>
-    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+    <linearGradient id="f" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
-      <stop offset="30%" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="26%" stop-color="#fff" stop-opacity="1"/>
       <stop offset="100%" stop-color="#fff" stop-opacity="1"/>
     </linearGradient>
-    <mask id="gridmask"><rect width="${W}" height="${H}" fill="url(#fade)"/></mask>
+    <mask id="m"><rect width="${W}" height="${H}" fill="url(#f)"/></mask>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c8f751" stop-opacity="0.26"/>
+      <stop offset="55%" stop-color="#7fd47a" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#c8f751" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
   <rect width="${W}" height="${H}" fill="${BG}"/>
-  <rect width="${W}" height="${H}" fill="url(#grid)" mask="url(#gridmask)"/>
+  <rect width="${W}" height="${H}" fill="url(#g)" mask="url(#m)"/>
 
-  ${diagram()}
+  <!-- The space the keys vacated -->
+  <ellipse cx="1090" cy="198" rx="240" ry="150" fill="url(#glow)"/>
 
-  <!-- Text block starts past the profile picture -->
-  <circle cx="436" cy="146" r="5" fill="${SIGNAL}"/>
-  <text x="454" y="152" font-family="${MONO}" font-size="16" letter-spacing="3.2" fill="${SIGNAL}">${lang.eyebrow}</text>
+  ${keycaps()}
 
-  <text x="432" y="228" font-family="${FONT}" font-size="52" font-weight="600" letter-spacing="-1.6" fill="${TEXT}">${lang.headline}</text>
+  <!-- Role, stack, site -->
+  <circle cx="424" cy="145" r="6" fill="${SIGNAL}"/>
+  <text x="446" y="158" font-family="${MONO}" font-size="34" letter-spacing="4.4" fill="${SIGNAL}">FULL STACK DEVELOPER</text>
 
-  <line x1="434" y1="266" x2="434" y2="304" stroke="#2a3038"/>
-  <text x="454" y="292" font-family="${MONO}" font-size="17" letter-spacing="1.2" fill="${MUTED}">juanchiiv.github.io</text>
+  ${stackIcons(446, 200)}
+
+  <text x="446" y="288" font-family="${MONO}" font-size="17" letter-spacing="1.2" fill="${DIM}">juanchiiv.github.io</text>
 </svg>`;
 
 writeFileSync('scripts/banner.svg', svg);
 
 await sharp(Buffer.from(svg), { density: 144 })
   .resize(W, H, { fit: 'fill' })
-  .png({ compressionLevel: 9, palette: true })
-  .toFile(outFile);
+  .png({ compressionLevel: 9 })
+  .toFile('public/linkedin-banner.png');
 
-console.log(outFile, 'written');
+console.log('public/linkedin-banner.png written');
