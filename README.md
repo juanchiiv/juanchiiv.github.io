@@ -84,6 +84,12 @@ npm i --no-save sharp && npm run og
 `scripts/build-og.mjs` composes it as an SVG using the site's own palette and the
 hero diagram, then rasterises it. Edit the script rather than the PNG.
 
+`npm run banner` builds the LinkedIn cover photo the same way — 1584×396, in
+`public/linkedin-banner.png`, with `npm run banner en` producing the English
+variant. Its layout leaves the bottom-left clear, because the profile picture
+sits there, and keeps everything away from the edges, because LinkedIn crops the
+sides on narrow screens.
+
 ## Replacing the CV
 
 `public/juan-diego-vidal-cv.pdf` — overwrite the file; the path comes from
